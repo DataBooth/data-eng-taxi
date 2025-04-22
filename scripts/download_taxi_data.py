@@ -1,0 +1,116 @@
+import httpx
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+import os
+import re
+
+
+def parse_indices(input_str, max_index):
+    """Parse a string like '1,3,5-8,10' into a sorted list of unique indices."""
+    indices = set()
+    tokens = [token.strip() for token in input_str.split(",")]
+    for token in tokens:
+        if "-" in token:
+            start, end = token.split("-")
+            try:
+                start = int(start)
+                end = int(end)
+                if start > end:
+                    start, end = end, start
+                for i in range(start, end + 1):
+                    if 0 <= i < max_index:
+                        indices.add(i)
+            except ValueError:
+                continue
+        else:
+            try:
+                idx = int(token)
+                if 0 <= idx < max_index:
+                    indices.add(idx)
+            except ValueError:
+                continue
+    return sorted(indices)
+
+
+def get_parquet_links(url, dataset_type="all"):
+    """Finds all Parquet file links on a given webpage, filtered by dataset type."""
+    try:
+        response = httpx.get(url, follow_redirects=True)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, "html.parser")
+        links = []
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            if href.endswith(".parquet"):
+                href_lower = href.lower()
+                # Filter by dataset type
+                if dataset_type == "yellow" and "yellow" not in href_lower:
+                    continue
+                if dataset_type == "green" and "green" not in href_lower:
+                    continue
+                if dataset_type == "fhv" and "fhv" not in href_lower:
+                    continue
+                absolute_url = urljoin(url, href)
+                links.append(absolute_url)
+        return links
+    except httpx.RequestError as e:
+        print(f"Error fetching URL: {e}")
+        return []
+
+
+def download_files(links, download_dir="seeds"):
+    """Downloads files from the given URLs to the specified directory."""
+    if not os.path.exists(download_dir):
+        os.makedirs(download_dir)
+
+    for link in links:
+        filename = os.path.basename(link)
+        filepath = os.path.join(download_dir, filename)
+        try:
+            print(f"Downloading {link} to {filepath}")
+            with httpx.stream("GET", link, follow_redirects=True) as response:
+                response.raise_for_status()
+                with open(filepath, "wb") as f:
+                    for chunk in response.iter_bytes():
+                        f.write(chunk)
+            print(f"Downloaded {filename} successfully.")
+        except httpx.RequestError as e:
+            print(f"Failed to download {link}: {e}")
+
+
+if __name__ == "__main__":
+    tlc_trip_data_url = "https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page"
+    print("Which dataset do you want to download?")
+    print("[y]ellow, [g]reen, [f]hv, [a]ll")
+    dataset_choice = input("Enter your choice (y/g/f/a): ").strip().lower()
+    if dataset_choice == "y":
+        dataset_type = "yellow"
+    elif dataset_choice == "g":
+        dataset_type = "green"
+    elif dataset_choice == "f":
+        dataset_type = "fhv"
+    else:
+        dataset_type = "all"
+
+    parquet_links = get_parquet_links(tlc_trip_data_url, dataset_type)
+
+    if parquet_links:
+        print("\nFound Parquet files:")
+        for i, link in enumerate(parquet_links):
+            print(f"[{i}] {link}")
+
+        selected_indices = input(
+            "\nEnter the indices of the files to download (comma-separated, e.g., 0,1,2 or 13-24 or all): "
+        ).strip()
+        if selected_indices.lower() == "all":
+            download_links = parquet_links
+        else:
+            indices = parse_indices(selected_indices, len(parquet_links))
+            download_links = [parquet_links[i] for i in indices]
+
+        if download_links:
+            download_files(download_links)
+        else:
+            print("No files selected for download.")
+    else:
+        print("No Parquet files found on the page.")
