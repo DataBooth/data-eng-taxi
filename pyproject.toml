@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "bs4>=0.0.2",
+    "loguru>=0.7.3",
     "prefect>=3.3.5",
     "sqlmesh[databricks,web]>=0.175.2",
 ]

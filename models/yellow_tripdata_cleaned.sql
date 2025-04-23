@@ -7,7 +7,7 @@ MODEL (
 SELECT
   *
 FROM
-  nyc.yellow_tripdata
+  nyc.yellow_tripdata_seed
 WHERE
   passenger_count IS NOT NULL
   AND trip_distance > 0

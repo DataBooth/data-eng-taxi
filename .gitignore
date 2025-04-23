@@ -2,8 +2,7 @@
 
 .DS_Store
 *.parquet
-db.db
-db.db.wal
+*.duckdb
 .vscode/
 *.OFF
 

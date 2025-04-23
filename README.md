@@ -116,6 +116,8 @@ cd data-eng-taxi
 Download all 12 monthly parquet files from [NYC TLC](https://www1.nyc.gov/site/tlc/about/tlc-trip-record-data.page)
 Place them in the `seeds/` directory.
 
+e.g. [text](https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-01.parquet)
+
 3. **Configure SQLMesh:**
     - For local runs, use the provided DuckDB config.
     - For Databricks, edit `config.yaml` with your workspace details.

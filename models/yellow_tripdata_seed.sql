@@ -1,5 +1,5 @@
 MODEL (
-name nyc.yellow_tripdata,
+name nyc.yellow_tripdata_seed,
 kind SEED
 ) ;
 
