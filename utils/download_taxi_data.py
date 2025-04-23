@@ -1,8 +1,7 @@
 import httpx
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
-import os
-import re
+from pathlib import Path
 
 
 def parse_indices(input_str, max_index):
@@ -40,8 +39,8 @@ def get_parquet_links(url, dataset_type="all"):
         soup = BeautifulSoup(response.content, "html.parser")
         links = []
         for a in soup.find_all("a", href=True):
-            href = a["href"]
-            if href.endswith(".parquet"):
+            href = a["href"].strip()  # Remove leading/trailing spaces
+            if href.lower().endswith(".parquet"):  # Case-insensitive check
                 href_lower = href.lower()
                 # Filter by dataset type
                 if dataset_type == "yellow" and "yellow" not in href_lower:
@@ -49,6 +48,8 @@ def get_parquet_links(url, dataset_type="all"):
                 if dataset_type == "green" and "green" not in href_lower:
                     continue
                 if dataset_type == "fhv" and "fhv" not in href_lower:
+                    continue
+                if dataset_type == "fhvhv" and "fhvhv" not in href_lower:
                     continue
                 absolute_url = urljoin(url, href)
                 links.append(absolute_url)
@@ -59,18 +60,21 @@ def get_parquet_links(url, dataset_type="all"):
 
 
 def download_files(links, download_dir="seeds"):
-    """Downloads files from the given URLs to the specified directory."""
-    if not os.path.exists(download_dir):
-        os.makedirs(download_dir)
+    """Downloads files from the given URLs to the specified directory, skipping existing files."""
+    download_dir = Path(download_dir)
+    download_dir.mkdir(parents=True, exist_ok=True)
 
     for link in links:
-        filename = os.path.basename(link)
-        filepath = os.path.join(download_dir, filename)
+        filename = Path(link).name
+        filepath = download_dir / filename
+        if filepath.exists():
+            print(f"Skipping {filename}: already exists.")
+            continue
         try:
             print(f"Downloading {link} to {filepath}")
             with httpx.stream("GET", link, follow_redirects=True) as response:
                 response.raise_for_status()
-                with open(filepath, "wb") as f:
+                with filepath.open("wb") as f:
                     for chunk in response.iter_bytes():
                         f.write(chunk)
             print(f"Downloaded {filename} successfully.")
@@ -81,14 +85,16 @@ def download_files(links, download_dir="seeds"):
 if __name__ == "__main__":
     tlc_trip_data_url = "https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page"
     print("Which dataset do you want to download?")
-    print("[y]ellow, [g]reen, [f]hv, [a]ll")
-    dataset_choice = input("Enter your choice (y/g/f/a): ").strip().lower()
+    print("[y]ellow, [g]reen, [f]hv, [h]igh volume fhv, [a]ll")
+    dataset_choice = input("Enter your choice (y/g/f/h/a): ").strip().lower()
     if dataset_choice == "y":
         dataset_type = "yellow"
     elif dataset_choice == "g":
         dataset_type = "green"
     elif dataset_choice == "f":
         dataset_type = "fhv"
+    elif dataset_choice == "h":
+        dataset_type = "fhvhv"
     else:
         dataset_type = "all"
 
@@ -100,10 +106,17 @@ if __name__ == "__main__":
             print(f"[{i}] {link}")
 
         selected_indices = input(
-            "\nEnter the indices of the files to download (comma-separated, e.g., 0,1,2 or 13-24 or all): "
+            "\nEnter the indices (e.g., 0,1,2 or 13-24), 'all', or a 4-digit year (e.g., 2023): "
         ).strip()
+
+        # Check for 4-digit year
         if selected_indices.lower() == "all":
             download_links = parquet_links
+        elif selected_indices.isdigit() and len(selected_indices) == 4:
+            year = selected_indices
+            download_links = [link for link in parquet_links if year in Path(link).name]
+            if not download_links:
+                print(f"No files found for year {year}.")
         else:
             indices = parse_indices(selected_indices, len(parquet_links))
             download_links = [parquet_links[i] for i in indices]

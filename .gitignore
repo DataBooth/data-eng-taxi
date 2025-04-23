@@ -1,9 +1,11 @@
 # Extras
 
+.DS_Store
 *.parquet
 db.db
 db.db.wal
 .vscode/
+*.OFF
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
